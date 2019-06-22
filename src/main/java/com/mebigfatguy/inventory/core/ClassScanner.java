@@ -19,8 +19,11 @@ package com.mebigfatguy.inventory.core;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Type;
 
 import com.mebigfatguy.inventory.cls.ClassInventoryVisitor;
 
@@ -33,7 +36,30 @@ public class ClassScanner implements ArchiveScanner {
             ClassInventoryVisitor visitor = new ClassInventoryVisitor(inventory);
             ClassReader cr = new ClassReader(is);
             cr.accept(visitor, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            Set<String> classDependencies = getClassDependencies(cr);
+            classDependencies.forEach(System.out::println);
         }
+    }
+    
+    private Set<String> getClassDependencies(ClassReader reader) {
+        Set<String> dependencies = new HashSet<String>();
+        char[] charBuffer = new char[reader.getMaxStringLength()];
+        for (int i = 1; i < reader.getItemCount(); i++) {
+            int itemOffset = reader.getItem(i);
+            if (itemOffset > 0 && reader.readByte(itemOffset - 1) == 7) {
+                String classDescriptor = reader.readUTF8(itemOffset, charBuffer);
+                Type type = Type.getObjectType(classDescriptor);
+                while (type.getSort() == Type.ARRAY) {
+                    type = type.getElementType();
+                }
+                if (type.getSort() != Type.OBJECT) {
+                    continue;
+                }
+                String name = type.getClassName();
+                dependencies.add(name);
+            }
+        }
+        return dependencies;
     }
 
 }
